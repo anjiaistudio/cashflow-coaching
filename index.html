@@ -1,0 +1,313 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cashflow Coaching – Executive Dashboard (with Chat)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #111a2b;
+      --panel-2: #0e1626;
+      --text: #e6edf3;
+      --muted: #9fb0c0;
+      --accent: #31c48d;   /* health */
+      --warn: #ffb020;     /* watch */
+      --risk: #f05252;     /* at risk */
+      --brand: #7c83ff;
+      --line: #1b2440;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial, "Noto Sans", sans-serif; background: var(--bg); color: var(--text); }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, #0d1830, #0a1222); position: sticky; top: 0; z-index: 9; }
+    header h1 { font-size: 18px; letter-spacing: 0.2px; margin: 0; font-weight: 600; }
+    .badge { padding: 4px 8px; border-radius: 999px; font-weight: 600; font-size: 12px; }
+    .badge.healthy { background: rgba(49,196,141,0.15); color: var(--accent); border: 1px solid rgba(49,196,141,0.35); }
+    .badge.watch   { background: rgba(255,176,32,0.15); color: var(--warn); border: 1px solid rgba(255,176,32,0.35); }
+    .badge.risk    { background: rgba(240,82,82,0.15); color: var(--risk); border: 1px solid rgba(240,82,82,0.35); }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 18px 24px 40px; }
+    .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+    .panel h2 { font-size: 14px; margin: 0 0 10px 0; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+    .kpi { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .value { font-size: 20px; font-weight: 700; margin-top: 6px; }
+    .trend { font-size: 12px; margin-top: 2px; }
+    .trend.up { color: var(--accent); }
+    .trend.down { color: var(--risk); }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+    .list li { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; background: var(--panel-2); border: 1px solid var(--line); padding: 10px 12px; border-radius: 10px; }
+    .pill { font-size: 12px; padding: 4px 8px; border-radius: 9999px; border: 1px solid #31406a; color: #b8c7da; background: #0b1426; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .table th { color: var(--muted); font-weight: 600; }
+    .footer-note { color: #7f8ea3; font-size: 12px; margin-top: 10px; }
+    .legend { display:flex; gap:10px; align-items:center; color:#b8c7da; font-size:12px; }
+    .legend span { display:inline-flex; align-items:center; gap:6px; }
+    .swatch { width:10px; height:10px; border-radius:2px; display:inline-block; }
+    .toolbar { display:flex; gap:10px; align-items:center; }
+    .btn { background:#14203b; color:#dbe7ff; border:1px solid #26406d; padding:8px 10px; border-radius:8px; font-size:12px; cursor:pointer; }
+    .btn:hover { background:#17274a; }
+    .select, .input { background:#0f1a31; color:#dbe7ff; border:1px solid #253b66; padding:8px; border-radius:8px; font-size:12px; }
+
+    /* Chat widget */
+    .chat { display:flex; flex-direction:column; height: 360px; }
+    .chat-box { flex:1; overflow:auto; background: var(--panel-2); border:1px solid var(--line); border-radius: 10px; padding: 12px; }
+    .chat-row { display:flex; gap:10px; margin: 8px 0; }
+    .bubble { max-width: 78%; padding:10px 12px; border-radius: 12px; line-height: 1.35; font-size: 14px; }
+    .bubble.user { margin-left: auto; background:#193157; border:1px solid #2a4471; }
+    .bubble.ai   { background:#101b31; border:1px solid #23345a; }
+    .chat-input { display:flex; gap:8px; margin-top:10px; }
+    .chat-input .input { flex: 1; }
+    .hint { color:#91a4bc; font-size:12px; margin-top:6px; }
+
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
+      .kpis { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cashflow Coaching – Executive Dashboard (Sample)</h1>
+    <div class="toolbar">
+      <span class="badge healthy" id="healthBadge">HEALTHY</span>
+      <select class="select" id="horizonSel">
+        <option value="30">Horizon: 30 days</option>
+        <option value="60">Horizon: 60 days</option>
+        <option value="90" selected>Horizon: 90 days</option>
+      </select>
+      <button class="btn" id="whatIfBtn">What‑if: +$10k collected next week</button>
+      <button class="btn" onclick="window.print()">Print / Screenshot</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <!-- KPI Row -->
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Projected End‑of‑Month Balance</div>
+        <div class="value" id="kpi_eom">$142,300</div>
+        <div class="trend up" id="kpi_eom_trend">▲ +$8,450 vs last month</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Cash Runway</div>
+        <div class="value" id="kpi_runway">62 days</div>
+        <div class="trend up" id="kpi_runway_trend">▲ +7 days</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Overdue Receivables</div>
+        <div class="value" id="kpi_overdue">$27,900</div>
+        <div class="trend down" id="kpi_overdue_trend">▼ −$3,100</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Expense Volatility (30d)</div>
+        <div class="value" id="kpi_vol">Low</div>
+        <div class="trend" style="color:#b8c7da">stable</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Left Column: Cashflow forecast chart -->
+      <div class="panel">
+        <h2>Cashflow Forecast</h2>
+        <canvas id="cfChart" height="120"></canvas>
+        <div class="legend" style="margin-top:8px;">
+          <span><i class="swatch" style="background:#7c83ff"></i> Projected balance</span>
+          <span><i class="swatch" style="background:#3fa9f5"></i> Lower/Upper confidence</span>
+          <span><i class="swatch" style="background:#31c48d"></i> Actuals-to-date</span>
+        </div>
+        <div class="footer-note">Nightly batch predictions. Confidence bands shown (p80). What‑if sims update the curve client‑side.</div>
+      </div>
+
+      <!-- Right Column: Coaching + Alerts -->
+      <div class="panel">
+        <h2>Coaching Tips (Auto‑generated)</h2>
+        <ul class="list" id="tips">
+          <li>
+            <span>Collect top 3 overdue invoices ($12.4k) to extend runway by ~9 days.</span>
+            <span class="pill">Action</span>
+          </li>
+          <li>
+            <span>Schedule payroll on the first business day next month to smooth outflows.</span>
+            <span class="pill">Optimization</span>
+          </li>
+          <li>
+            <span>Q3 shows seasonal dip; consider a temporary 10% spend cap for 3 weeks.</span>
+            <span class="pill">Seasonality</span>
+          </li>
+        </ul>
+        <h2 style="margin-top:16px">Upcoming Alerts</h2>
+        <ul class="list" id="alerts">
+          <li>
+            <span>Runway threshold &lt; 45 days triggered if receivables slip by 7 days.</span>
+            <span class="badge watch">WATCH</span>
+          </li>
+          <li>
+            <span>Vendor ABC monthly bill expected next Tuesday ($5.2k).</span>
+            <span class="badge healthy">FYI</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:16px;">
+      <div class="panel">
+        <h2>Receivables Aging (Top Customers)</h2>
+        <table class="table" id="arTable">
+          <thead>
+            <tr><th>Customer</th><th>Current</th><th>1–30</th><th>31–60</th><th>61–90</th><th>&gt;90</th><th>Total</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>BlueJet Pty Ltd</td><td>$6,200</td><td>$3,100</td><td>$0</td><td>$0</td><td>$0</td><td>$9,300</td></tr>
+            <tr><td>Northbridge Foods</td><td>$0</td><td>$4,800</td><td>$2,500</td><td>$0</td><td>$0</td><td>$7,300</td></tr>
+            <tr><td>QuickFix Services</td><td>$0</td><td>$0</td><td>$1,800</td><td>$3,200</td><td>$900</td><td>$5,900</td></tr>
+          </tbody>
+        </table>
+        <div class="footer-note">Tip: Prioritize 31–60d and 61–90d buckets for fastest runway gains.</div>
+      </div>
+
+      <!-- Chat widget (clean, minimal) -->
+      <div class="panel">
+        <h2>Ask the Coach</h2>
+        <div class="chat">
+          <div class="chat-box" id="chatBox">
+            <div class="chat-row"><div class="bubble ai">Hi! I’m your cashflow coach. Ask me why the forecast dips, what to prioritize, or try a what‑if scenario.</div></div>
+          </div>
+          <div class="chat-input">
+            <input id="chatInput" class="input" placeholder="Ask about your cashflow…e.g.,Why is my runway risky in week 3?" />
+            <button class="btn" id="sendBtn">Send</button>
+          </div>
+          <!-- <div class="hint">This demo sends messages to a mock local handler. In production, use a WebSocket endpoint (e.g., <code>wss:///api/chat/ws</code>) to stream agent replies.</div> -->
+        </div>
+      </div>
+    </div>
+     <div class="grid" style="margin-top:16px;">
+      <div class="panel">
+        <h2>Anomalies (Last 30 days)</h2>
+        <table class="table" id="anoms">
+          <thead>
+            <tr><th>Date</th><th>Type</th><th>Detail</th><th>Severity</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>08 Feb</td><td>Expense Spike</td><td>Marketing spend 2.2× baseline</td><td><span class="badge watch">Medium</span></td></tr>
+            <tr><td>02 Feb</td><td>Late Payment</td><td>Northbridge Foods +14 days past terms</td><td><span class="badge risk">High</span></td></tr>
+          </tbody>
+        </table>
+        <div class="footer-note">Anomalies are statistical; coaching applies human‑safe rules to suggested actions.</div>
+      </div>
+    </div>
+    
+	<div class="panel" style="margin-top:16px;">
+      <h2>What‑if Simulator </h2>
+      <div class="two-col">
+        <div>
+          <label class="label">Collect additional amount</label><br>
+          <input id="wi_amount" type="range" min="0" max="30000" step="1000" value="10000" style="width:100%;"/>
+          <div class="footer-note">$<span id="wi_amount_val">10,000</span> collected in <select id="wi_days" class="select"><option value="7">7</option><option value="14">14</option><option value="21">21</option></select> days.</div>
+        </div>
+        <div>
+          <label class="label">Result</label>
+          <ul class="list">
+            <li><span>New projected EoM balance</span><span id="wi_eom" class="pill">$—</span></li>
+            <li><span>Runway impact</span><span id="wi_runway" class="pill">+— days</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ---------------------------- Sample Data ---------------------------- */
+    const days = 90; // base horizon
+    const today = new Date();
+    function fmt(d){ return d.toLocaleDateString(undefined,{month:'short', day:'2-digit'}); }
+    const labels = [...Array(days).keys()].map(i=>{ const d = new Date(today); d.setDate(d.getDate()+i-60); return fmt(d); });
+
+    // Generate synthetic series: actuals (60d) + forecast (30d) w/ band
+    const base = 120000; const actuals = []; const forecast = []; const lower = []; const upper = [];
+    let bal = base - 15000;
+    for (let i=0;i<labels.length;i++){
+      const inflow = (i%14===3)? 18000 : ((i%14===10)? 12000 : 3000*(Math.random()*0.6));
+      const outflow = (i%7===5)? 9000 : 2500*(1+Math.random());
+      bal += inflow - outflow;
+      if (i<60) { actuals.push(bal); forecast.push(null); lower.push(null); upper.push(null); }
+      else { const f = actuals[59] + (i-60)*600 + Math.sin(i/6)*1200; forecast.push(f); lower.push(f*0.95); upper.push(f*1.05); actuals.push(null); }
+    }
+
+    let kpiEom = 142300; let kpiRunway = 62;
+
+    /* ---------------------------- Chart ---------------------------- */
+    const ctx = document.getElementById('cfChart');
+    const cfChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label:'Lower', data: lower, borderColor:'rgba(63,169,245,0)', backgroundColor:'rgba(63,169,245,0.15)', fill:'+1', pointRadius:0, tension:0.25, order:3 },
+          { label:'Upper', data: upper, borderColor:'rgba(63,169,245,0)', backgroundColor:'rgba(63,169,245,0.15)', fill:false, pointRadius:0, tension:0.25, order:3 },
+          { label:'Projected', data: forecast, borderColor:'#7c83ff', backgroundColor:'rgba(124,131,255,0.15)', fill:false, pointRadius:0, tension:0.25, order:2, borderWidth:2 },
+          { label:'Actuals', data: actuals, borderColor:'#31c48d', backgroundColor:'rgba(49,196,141,0.2)', fill:false, pointRadius:0, tension:0.25, order:1, borderWidth:2 }
+        ]
+      },
+      options: {
+        interaction: { mode:'index', intersect:false },
+        plugins: { legend: { display:false }, tooltip: { callbacks: { label: ctx=> `$${Math.round(ctx.parsed.y).toLocaleString()}` } }},
+        scales: { x: { ticks: { maxTicksLimit: 10, color:'#9fb0c0' }, grid:{ color:'var(--line)' } }, y: { ticks: { color:'#9fb0c0', callback: v => `$${v/1000}k` }, grid:{ color:'var(--line)' } } }
+      }
+    });
+
+    /* ---------------------------- What-if (client-only) ---------------------------- */
+    const amountEl = document.getElementById('wi_amount'); const amountValEl = document.getElementById('wi_amount_val'); const wiDaysEl = document.getElementById('wi_days'); const wiEomEl = document.getElementById('wi_eom'); const wiRunwayEl = document.getElementById('wi_runway'); const healthBadge = document.getElementById('healthBadge');
+    function updateWhatIf(){
+      const add = Number(amountEl.value); amountValEl.textContent = add.toLocaleString(); const shiftDays = Number(wiDaysEl.value);
+      const projIdx = labels.findIndex((_,i)=> i>=60+shiftDays);
+      if (projIdx>0){
+        cfChart.data.datasets[2].data = forecast.map((v,i)=> i===projIdx? (v+add) : v);
+        cfChart.data.datasets[0].data = lower.map((v,i)=> i===projIdx? (v+add*0.95) : v);
+        cfChart.data.datasets[1].data = upper.map((v,i)=> i===projIdx? (v+add*1.05) : v);
+        cfChart.update('none');
+      }
+      const newEom = kpiEom + Math.round(add*0.85); const runwayDelta = Math.max(1, Math.round(add/1200));
+      wiEomEl.textContent = `$${newEom.toLocaleString()}`; wiRunwayEl.textContent = `+${runwayDelta} days`;
+      const totalRunway = kpiRunway + runwayDelta;
+      if (totalRunway >= 60){ healthBadge.textContent='HEALTHY'; healthBadge.className='badge healthy'; }
+      else if (totalRunway >= 35){ healthBadge.textContent='WATCH'; healthBadge.className='badge watch'; }
+      else { healthBadge.textContent='AT RISK'; healthBadge.className='badge risk'; }
+    }
+    amountEl.addEventListener('input', updateWhatIf); wiDaysEl.addEventListener('change', updateWhatIf); document.getElementById('whatIfBtn').addEventListener('click', ()=>{ amountEl.value = 10000; wiDaysEl.value = '7'; updateWhatIf(); }); updateWhatIf();
+
+    // horizon selector (visual only)
+    document.getElementById('horizonSel').addEventListener('change', (e)=>{ const val = Number(e.target.value); cfChart.options.scales.x.ticks.maxTicksLimit = val/6; cfChart.update(); });
+
+    /* ---------------------------- Minimal Chat (Mock) ---------------------------- */
+    const chatBox = document.getElementById('chatBox'); const chatInput = document.getElementById('chatInput'); const sendBtn = document.getElementById('sendBtn');
+
+    // Replace this with a real WebSocket to /api/chat/ws in production
+    async function mockAgentReply(userMsg){
+      // extremely simple mock response logic
+      if (/why|driver|dip|runway/i.test(userMsg)) return "Runway dips in week 3 due to payroll timing and two invoices aging into 31–60d. Prioritize those collections to recover ~7–9 days.";
+      if (/what.?if|collect|10k|10000/i.test(userMsg)) return "Collecting $10k in 7 days lifts the day-14 balance and extends runway by ~8 days. I can simulate different amounts if you'd like.";
+      if (/invoice|who|which/i.test(userMsg)) return "Top invoices to prioritize: Northbridge Foods ($4.8k, 1–30d) and QuickFix Services ($3.2k, 61–90d).";
+      return "I can explain forecast drivers, suggest actions, and run what‑ifs. Try: ‘Why does the forecast dip on week 3?’ or ‘Which invoices should I collect first?’";
+    }
+
+    function appendBubble(text, who='ai'){
+      const row = document.createElement('div'); row.className='chat-row';
+      const bubble = document.createElement('div'); bubble.className = 'bubble ' + (who==='user' ? 'user':'ai'); bubble.textContent = text;
+      row.appendChild(bubble); chatBox.appendChild(row); chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    sendBtn.addEventListener('click', async ()=>{
+      const msg = chatInput.value.trim(); if(!msg) return; appendBubble(msg, 'user'); chatInput.value='';
+      const thinking = document.createElement('div'); thinking.className='chat-row'; thinking.innerHTML = '<div class="bubble ai">…</div>'; chatBox.appendChild(thinking); chatBox.scrollTop = chatBox.scrollHeight;
+      const reply = await mockAgentReply(msg); thinking.remove(); appendBubble(reply, 'ai');
+    });
+    chatInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ sendBtn.click(); }});
+  </script>
+</body>
+</html>
